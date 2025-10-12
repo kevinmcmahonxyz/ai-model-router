@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: router_password
       POSTGRES_DB: router_db
     ports:
-      - "5432:5432"
+      - "5433:5432"  # External:Internal - changed from 5432:5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,7 +23,7 @@ services:
     volumes:
       - ./backend:/app
     ports:
-      - "8000:8000"
+      - "8001:8000"  # Also changed from 8000 to 8001 to avoid conflict with your 5000
     environment:
       - DATABASE_URL=postgresql://router_user:router_password@postgres:5432/router_db
       - OPENAI_API_KEY=${OPENAI_API_KEY}
