@@ -3,15 +3,19 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from pydantic_settings import BaseSettings
+from typing import Optional
 
 
 class Settings(BaseSettings):
     """Application settings from environment variables."""
     database_url: str
     openai_api_key: str
+    app_env: Optional[str] = "development"
+    log_level: Optional[str] = "INFO"
     
     class Config:
         env_file = ".env"
+        extra = "ignore"  # Ignore extra fields in .env
 
 
 settings = Settings()
