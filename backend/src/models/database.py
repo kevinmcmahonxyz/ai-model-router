@@ -10,12 +10,13 @@ class Settings(BaseSettings):
     """Application settings from environment variables."""
     database_url: str
     openai_api_key: str
+    anthropic_api_key: str  # Add this line
     app_env: Optional[str] = "development"
     log_level: Optional[str] = "INFO"
     
     class Config:
         env_file = ".env"
-        extra = "ignore"  # Ignore extra fields in .env
+        extra = "ignore"
 
 
 settings = Settings()

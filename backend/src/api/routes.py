@@ -1,14 +1,19 @@
 """API routes."""
+# Standard library imports
 import uuid
 from datetime import datetime
 from typing import Dict
+
+# Third-party imports
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 
+# Local application imports
 from src.api.models import ChatCompletionRequest, ChatCompletionResponse, UsageInfo
 from src.models.database import get_db, settings
-from src.models.schemas import User, Model, Request
+from src.models.schemas import User, Model, Request, Provider
 from src.providers.openai_provider import OpenAIProvider
+from src.providers.anthropic_provider import AnthropicProvider
 from src.services.cost_calculator import calculate_cost
 
 router = APIRouter()
@@ -32,15 +37,12 @@ async def chat_completion(
     db: Session = Depends(get_db)
 ):
     """
-    Route chat completion request to OpenAI.
+    Route chat completion request to appropriate provider.
     
-    **Learning notes:**
-    - Validates API key via header
-    - Looks up model and pricing in database
-    - Calls OpenAI provider
-    - Calculates cost
-    - Logs everything to database
-    - Returns response with metadata
+    **Phase 2 Update:**
+    - Now supports multiple providers (OpenAI, Anthropic)
+    - Automatically routes based on model name
+    - All providers return standardized response format
     """
     
     # Look up the model in database
@@ -55,9 +57,26 @@ async def chat_completion(
             detail=f"Model '{request.model}' not found or inactive"
         )
     
-    # Initialize provider
-    from src.models.database import settings
-    provider = OpenAIProvider(api_key=settings.openai_api_key)
+    # Get provider info
+    provider_record = db.query(Provider).filter(
+        Provider.id == model.provider_id
+    ).first()
+    
+    if not provider_record or not provider_record.is_active:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Provider for model '{request.model}' is not available"
+        )
+    
+    if provider_record.name == "openai":
+        provider = OpenAIProvider(api_key=settings.openai_api_key)
+    elif provider_record.name == "anthropic":
+        provider = AnthropicProvider(api_key=settings.anthropic_api_key)
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Provider '{provider_record.name}' not implemented"
+        )
     
     # Convert Pydantic messages to dict format
     messages = [msg.dict() for msg in request.messages]
@@ -75,7 +94,7 @@ async def chat_completion(
         ""
     )
     
-    # Send request to OpenAI
+    # Send request to provider
     result = await provider.send_request(
         messages=messages,
         model=request.model,
@@ -138,6 +157,7 @@ async def chat_completion(
     # Print to console for visibility (learning/debugging)
     print(f"\n{'='*60}")
     print(f"✓ Request successful")
+    print(f"Provider: {provider_record.name}")
     print(f"Model: {request.model}")
     print(f"Tokens: {usage['input_tokens']} in / {usage['output_tokens']} out")
     print(f"Cost: ${cost_info['total_cost_usd']:.6f}")
@@ -148,7 +168,7 @@ async def chat_completion(
     return ChatCompletionResponse(
         id=str(request_id),
         model=result["model"],
-        provider="openai",
+        provider=provider_record.name,  # Now dynamic based on actual provider
         content=result["content"],
         finish_reason=result["finish_reason"],
         usage=UsageInfo(
