@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 
 from src.api.models import ChatCompletionRequest, ChatCompletionResponse, UsageInfo
-from src.models.database import get_db
+from src.models.database import get_db, settings
 from src.models.schemas import User, Model, Request
 from src.providers.openai_provider import OpenAIProvider
 from src.services.cost_calculator import calculate_cost
@@ -56,7 +56,8 @@ async def chat_completion(
         )
     
     # Initialize provider
-    provider = OpenAIProvider()
+    from src.models.database import settings
+    provider = OpenAIProvider(api_key=settings.openai_api_key)
     
     # Convert Pydantic messages to dict format
     messages = [msg.dict() for msg in request.messages]

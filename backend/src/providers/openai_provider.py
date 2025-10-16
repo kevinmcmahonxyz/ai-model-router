@@ -1,19 +1,25 @@
 """OpenAI provider implementation."""
 import time
 from typing import List, Dict, Any
-import httpx
 from openai import OpenAI
 import tiktoken
 
-from src.models.database import settings
+from src.providers.base_provider import LLMProvider
 
 
-class OpenAIProvider:
+class OpenAIProvider(LLMProvider):
     """Handle requests to OpenAI API."""
     
-    def __init__(self):
-        self.client = OpenAI(api_key=settings.openai_api_key)
+    def __init__(self, api_key: str):
+        """Initialize OpenAI provider."""
+        super().__init__(api_key)
+        self.client = OpenAI(api_key=api_key)
         self.base_url = "https://api.openai.com/v1"
+    
+    @property
+    def provider_name(self) -> str:
+        """Return provider name."""
+        return "openai"
     
     async def send_request(
         self,
@@ -30,7 +36,7 @@ class OpenAIProvider:
             **kwargs: Additional parameters (temperature, max_tokens, etc.)
         
         Returns:
-            Dict with response data and metadata
+            Standardized dict with response data and metadata
         """
         start_time = time.time()
         
@@ -93,7 +99,11 @@ class OpenAIProvider:
             encoding = tiktoken.get_encoding("cl100k_base")
             return len(encoding.encode(text))
     
-    def count_messages_tokens(self, messages: List[Dict[str, str]], model: str) -> int:
+    def count_messages_tokens(
+        self,
+        messages: List[Dict[str, str]],
+        model: str
+    ) -> int:
         """
         Count tokens for a list of messages.
         Includes overhead for message formatting.
