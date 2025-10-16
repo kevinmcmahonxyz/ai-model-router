@@ -14,6 +14,8 @@ from src.models.database import get_db, settings
 from src.models.schemas import User, Model, Request, Provider
 from src.providers.openai_provider import OpenAIProvider
 from src.providers.anthropic_provider import AnthropicProvider
+from src.providers.deepseek_provider import DeepSeekProvider
+from src.providers.google_provider import GoogleProvider
 from src.services.cost_calculator import calculate_cost
 
 router = APIRouter()
@@ -39,8 +41,8 @@ async def chat_completion(
     """
     Route chat completion request to appropriate provider.
     
-    **Phase 2 Update:**
-    - Now supports multiple providers (OpenAI, Anthropic)
+    **Phase 2 Complete:**
+    - Now supports 4 providers: OpenAI, Anthropic, DeepSeek, Google
     - Automatically routes based on model name
     - All providers return standardized response format
     """
@@ -68,10 +70,15 @@ async def chat_completion(
             detail=f"Provider for model '{request.model}' is not available"
         )
     
+    # Initialize the appropriate provider based on provider name
     if provider_record.name == "openai":
         provider = OpenAIProvider(api_key=settings.openai_api_key)
     elif provider_record.name == "anthropic":
         provider = AnthropicProvider(api_key=settings.anthropic_api_key)
+    elif provider_record.name == "deepseek":
+        provider = DeepSeekProvider(api_key=settings.deepseek_api_key)
+    elif provider_record.name == "google":
+        provider = GoogleProvider(api_key=settings.google_api_key)
     else:
         raise HTTPException(
             status_code=500,
@@ -168,7 +175,7 @@ async def chat_completion(
     return ChatCompletionResponse(
         id=str(request_id),
         model=result["model"],
-        provider=provider_record.name,  # Now dynamic based on actual provider
+        provider=provider_record.name,
         content=result["content"],
         finish_reason=result["finish_reason"],
         usage=UsageInfo(

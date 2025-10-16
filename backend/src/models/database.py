@@ -10,7 +10,9 @@ class Settings(BaseSettings):
     """Application settings from environment variables."""
     database_url: str
     openai_api_key: str
-    anthropic_api_key: str  # Add this line
+    anthropic_api_key: str
+    deepseek_api_key: str
+    google_api_key: str
     app_env: Optional[str] = "development"
     log_level: Optional[str] = "INFO"
     
