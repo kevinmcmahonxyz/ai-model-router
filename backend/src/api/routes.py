@@ -72,13 +72,13 @@ async def chat_completion(
     
     # Initialize the appropriate provider based on provider name
     if provider_record.name == "openai":
-        provider = OpenAIProvider(api_key=settings.openai_api_key)
+        provider = OpenAIProvider()
     elif provider_record.name == "anthropic":
-        provider = AnthropicProvider(api_key=settings.anthropic_api_key)
+        provider = AnthropicProvider()
     elif provider_record.name == "deepseek":
-        provider = DeepSeekProvider(api_key=settings.deepseek_api_key)
+        provider = DeepSeekProvider()
     elif provider_record.name == "google":
-        provider = GoogleProvider(api_key=settings.google_api_key)
+        provider = GoogleProvider()
     else:
         raise HTTPException(
             status_code=500,

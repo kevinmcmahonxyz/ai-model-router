@@ -4,22 +4,15 @@ from typing import List, Dict, Any
 from openai import OpenAI
 import tiktoken
 
-from src.providers.base_provider import LLMProvider
+from src.models.database import settings
 
 
-class OpenAIProvider(LLMProvider):
+class OpenAIProvider:
     """Handle requests to OpenAI API."""
     
-    def __init__(self, api_key: str):
-        """Initialize OpenAI provider."""
-        super().__init__(api_key)
-        self.client = OpenAI(api_key=api_key)
+    def __init__(self):
+        self.client = OpenAI(api_key=settings.openai_api_key)
         self.base_url = "https://api.openai.com/v1"
-    
-    @property
-    def provider_name(self) -> str:
-        """Return provider name."""
-        return "openai"
     
     async def send_request(
         self,
@@ -36,12 +29,12 @@ class OpenAIProvider(LLMProvider):
             **kwargs: Additional parameters (temperature, max_tokens, etc.)
         
         Returns:
-            Standardized dict with response data and metadata
+            Dict with response data and metadata
         """
         start_time = time.time()
         
         try:
-            # Call OpenAI API (synchronous - we'll make it async later)
+            # Call OpenAI API
             response = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -50,8 +43,33 @@ class OpenAIProvider(LLMProvider):
             
             latency_ms = int((time.time() - start_time) * 1000)
             
+            # Safety check: ensure choices exist
+            if not response.choices or len(response.choices) == 0:
+                return {
+                    "success": False,
+                    "content": None,
+                    "finish_reason": None,
+                    "usage": None,
+                    "latency_ms": latency_ms,
+                    "model": model,
+                    "error": "No choices returned from OpenAI API"
+                }
+            
             # Extract response data
             choice = response.choices[0]
+            
+            # Safety check: ensure usage exists
+            if not hasattr(response, 'usage') or response.usage is None:
+                return {
+                    "success": False,
+                    "content": choice.message.content,
+                    "finish_reason": choice.finish_reason,
+                    "usage": None,
+                    "latency_ms": latency_ms,
+                    "model": model,
+                    "error": "No usage data returned from OpenAI API"
+                }
+            
             usage = response.usage
             
             return {
@@ -99,11 +117,7 @@ class OpenAIProvider(LLMProvider):
             encoding = tiktoken.get_encoding("cl100k_base")
             return len(encoding.encode(text))
     
-    def count_messages_tokens(
-        self,
-        messages: List[Dict[str, str]],
-        model: str
-    ) -> int:
+    def count_messages_tokens(self, messages: List[Dict[str, str]], model: str) -> int:
         """
         Count tokens for a list of messages.
         Includes overhead for message formatting.

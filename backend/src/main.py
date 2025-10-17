@@ -34,13 +34,3 @@ async def root():
         "version": "0.1.0",
         "docs": "/docs"
     }
-
-
-@app.get("/")
-async def root():
-    """Root endpoint."""
-    return {
-        "message": "AI Model Router API",
-        "version": "0.1.0",
-        "docs": "/docs"
-    }
