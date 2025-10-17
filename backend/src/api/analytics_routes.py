@@ -258,7 +258,17 @@ async def get_requests(
         query = query.filter(Request.status == status)
     
     if search:
-        query = query.filter(Request.prompt_text.ilike(f"%{search}%"))
+        # Search in prompt text, model name, and provider name
+        model_subquery = db.query(Model.id).filter(Model.model_id.ilike(f"%{search}%")).subquery()
+        provider_subquery = db.query(Provider.id).filter(Provider.name.ilike(f"%{search}%")).subquery()
+        
+        query = query.filter(
+            or_(
+                Request.prompt_text.ilike(f"%{search}%"),
+                Request.model_id.in_(model_subquery),
+                Request.provider_id.in_(provider_subquery)
+            )
+        )
     
     if start_date:
         query = query.filter(Request.created_at >= start_date)
