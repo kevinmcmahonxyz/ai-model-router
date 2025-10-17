@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import router
+from src.api.analytics_routes import router as analytics_router
 
 # Create FastAPI app
 app = FastAPI(
@@ -22,6 +23,17 @@ app.add_middleware(
 
 # Include routes
 app.include_router(router)
+app.include_router(analytics_router)
+
+
+@app.get("/")
+async def root():
+    """Root endpoint."""
+    return {
+        "message": "AI Model Router API",
+        "version": "0.1.0",
+        "docs": "/docs"
+    }
 
 
 @app.get("/")
