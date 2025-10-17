@@ -1,6 +1,7 @@
 """Analytics API endpoints for dashboard."""
 from datetime import datetime, timedelta
 from typing import Optional, List
+import uuid
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
@@ -249,6 +250,9 @@ async def get_requests(
         model_obj = db.query(Model).filter(Model.model_id == model).first()
         if model_obj:
             query = query.filter(Request.model_id == model_obj.id)
+        else:
+            # Model doesn't exist - return empty results
+            query = query.filter(Request.id == None)
     
     if status:
         query = query.filter(Request.status == status)
@@ -319,6 +323,12 @@ async def get_request_detail(
     **Returns:**
     - Complete request data including full prompt and response
     """
+    # Validate UUID format
+    try:
+        uuid.UUID(request_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid UUID format")
+    
     # Find request
     req = db.query(Request).filter(
         and_(
