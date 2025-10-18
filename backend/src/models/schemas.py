@@ -15,6 +15,8 @@ class User(Base):
     api_key = Column(String(64), unique=True, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    spending_limit_usd = Column(Float, nullable=True)
+    total_spent_usd = Column(Float, nullable=False, default=0.0)
     
     # Relationships
     requests = relationship("Request", back_populates="user")
