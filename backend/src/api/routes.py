@@ -1,7 +1,7 @@
 """API routes."""
 import uuid
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,7 @@ from src.models.schemas import User, Model, Request
 from src.providers.openai_provider import OpenAIProvider
 from src.services.cost_calculator import calculate_cost
 from src.services.model_selector import ModelSelector
+from src.services.budget_service import BudgetService
 
 router = APIRouter()
 
@@ -87,6 +88,27 @@ async def chat_completion(
     
     # Convert messages to dict format
     messages = [msg.dict() for msg in request.messages]
+
+    # Budget checking for cost-optimized mode
+    budget_service = BudgetService(db)
+    
+    if request.mode == "cost-optimized":
+        selector = ModelSelector(db)
+        cheapest = selector.get_cheapest_model(
+            messages=messages,
+            expected_output_tokens=request.expected_output_tokens,
+            provider_filter=request.provider_filter
+        )
+        
+        if cheapest:
+            estimated_cost = cheapest["estimated_cost"]
+            budget_check = budget_service.check_budget(user.id, estimated_cost)
+            
+            if not budget_check["approved"]:
+                raise HTTPException(
+                    status_code=402,  # Payment Required
+                    detail=budget_check
+                )
     
     # Prepare request params
     request_params = {}
@@ -234,6 +256,9 @@ async def chat_completion(
     db.add(request_log)
     db.commit()
     
+    # Update user's total spending
+    budget_service.update_spending(user.id, cost_info["total_cost_usd"])
+
     # Console output
     print(f"\n{'='*60}")
     print(f"✓ Request successful")
@@ -268,6 +293,60 @@ async def chat_completion(
         models_considered=models_considered
     )
 
+@router.get("/v1/budget")
+async def get_budget(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get current budget and spending information."""
+    budget_service = BudgetService(db)
+    spending_info = budget_service.get_user_spending(user.id)
+    
+    return {
+        "user_id": str(user.id),
+        "spending": spending_info
+    }
+
+
+@router.put("/v1/budget/limit")
+async def set_budget_limit(
+    limit_usd: Optional[float] = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Set spending limit for the user.
+    
+    Set to null for unlimited budget.
+    """
+    if limit_usd is not None and limit_usd < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Spending limit must be positive or null"
+        )
+    
+    budget_service = BudgetService(db)
+    budget_service.set_spending_limit(user.id, limit_usd)
+    
+    return {
+        "message": "Spending limit updated",
+        "spending_limit_usd": limit_usd
+    }
+
+
+@router.post("/v1/budget/reset")
+async def reset_budget(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Reset spending counter to zero."""
+    budget_service = BudgetService(db)
+    budget_service.reset_spending(user.id)
+    
+    return {
+        "message": "Spending counter reset to zero",
+        "total_spent_usd": 0.0
+    }
 
 @router.get("/health")
 async def health_check():
