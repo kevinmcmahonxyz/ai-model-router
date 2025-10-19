@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Integer, Float, DateTime, Text, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -17,6 +18,7 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     spending_limit_usd = Column(Float, nullable=True)
     total_spent_usd = Column(Float, nullable=False, default=0.0)
+    comparisons = relationship("Comparison", back_populates="user")
     
     # Relationships
     requests = relationship("Request", back_populates="user")
@@ -55,6 +57,21 @@ class Model(Base):
     provider = relationship("Provider", back_populates="models")
     requests = relationship("Request", back_populates="model")
 
+class Comparison(Base):
+    """Comparison of multiple models on the same prompt."""
+    __tablename__ = "comparisons"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    prompt_text = Column(Text, nullable=False)
+    models_used = Column(JSON, nullable=False)  # List of model IDs
+    total_cost_usd = Column(Float, nullable=False, default=0.0)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="comparisons")
+    requests = relationship("Request", back_populates="comparison")
+
 
 class Request(Base):
     """Log of all LLM requests and responses."""
@@ -64,6 +81,8 @@ class Request(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     model_id = Column(Integer, ForeignKey("models.id"), nullable=False)
     provider_id = Column(Integer, ForeignKey("providers.id"), nullable=False)
+    comparison_id = Column(UUID(as_uuid=True), ForeignKey("comparisons.id"), nullable=True)
+    comparison = relationship("Comparison", back_populates="requests")
     
     # Request/Response content
     prompt_text = Column(Text, nullable=False)

@@ -82,3 +82,29 @@ class ChatCompletionResponse(BaseModel):
     created_at: str
     selection_mode: Optional[str] = None  # Track how model was selected
     models_considered: Optional[int] = None  # How many models were evaluated
+
+class ComparisonRequest(BaseModel):
+    """Request model for A/B comparison endpoint."""
+    messages: List[Dict[str, str]]
+    models: List[str]  # List of model IDs to compare
+    temperature: Optional[float] = 0.7
+    max_tokens: Optional[int] = None
+    top_p: Optional[float] = None
+
+class ComparisonResult(BaseModel):
+    """Individual model result in a comparison."""
+    model: str
+    provider: str
+    content: Optional[str] = None
+    finish_reason: Optional[str] = None
+    usage: UsageInfo
+    latency_ms: int
+    status: str
+    error_message: Optional[str] = None
+
+class ComparisonResponse(BaseModel):
+    """Response model for A/B comparison endpoint."""
+    comparison_id: str
+    results: List[ComparisonResult]
+    total_cost_usd: float
+    created_at: str    
