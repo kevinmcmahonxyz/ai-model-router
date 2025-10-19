@@ -12,6 +12,8 @@ from src.providers.openai_provider import OpenAIProvider
 from src.services.cost_calculator import calculate_cost
 from src.services.model_selector import ModelSelector
 from src.services.budget_service import BudgetService
+from src.api.models import ComparisonRequest, ComparisonResponse
+from src.services.comparison_service import ComparisonService
 
 router = APIRouter()
 
@@ -43,21 +45,30 @@ async def _send_to_provider(
     Returns:
         Result dict from provider
     """
-    # For Phase 4, we only support OpenAI
-    # In Phase 2, we'll add more providers here
+    from src.providers.anthropic_provider import AnthropicProvider
+    from src.providers.deepseek_provider import DeepSeekProvider
+    from src.providers.google_provider import GoogleProvider
+    
+    # Route to correct provider
     if model.provider.name == "openai":
         provider = OpenAIProvider()
-        return await provider.send_request(
-            messages=messages,
-            model=model.model_id,
-            **request_params
-        )
+    elif model.provider.name == "anthropic":
+        provider = AnthropicProvider()
+    elif model.provider.name == "deepseek":
+        provider = DeepSeekProvider()
+    elif model.provider.name == "google":
+        provider = GoogleProvider()
     else:
         raise HTTPException(
             status_code=500,
-            detail=f"Provider {model.provider.name} not yet implemented"
+            detail=f"Provider {model.provider.name} not supported"
         )
-
+    
+    return await provider.send_request(
+        messages=messages,
+        model=model.model_id,
+        **request_params
+    )
 
 @router.post("/v1/chat/completions", response_model=ChatCompletionResponse)
 async def chat_completion(
@@ -292,6 +303,52 @@ async def chat_completion(
         selection_mode=selection_mode,
         models_considered=models_considered
     )
+
+@router.post("/v1/chat/compare", response_model=ComparisonResponse)
+async def compare_models(
+    request: ComparisonRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    A/B test multiple models with the same prompt.
+    
+    Send the same prompt to multiple models concurrently and compare
+    their responses, costs, and latencies.
+    
+    All requests are linked together via a comparison_id for analysis.
+    """
+    if not request.models or len(request.models) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="Must specify at least 2 models for comparison"
+        )
+    
+    if len(request.models) > 10:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum 10 models per comparison"
+        )
+    
+    # Build request parameters
+    request_params = {}
+    if request.temperature is not None:
+        request_params['temperature'] = request.temperature
+    if request.max_tokens is not None:
+        request_params['max_tokens'] = request.max_tokens
+    if request.top_p is not None:
+        request_params['top_p'] = request.top_p
+    
+    # Execute comparison
+    comparison_service = ComparisonService(db)
+    result = await comparison_service.compare_models(
+        user_id=user.id,
+        messages=request.messages,
+        model_ids=request.models,
+        request_params=request_params
+    )
+    
+    return result
 
 @router.get("/v1/budget")
 async def get_budget(
