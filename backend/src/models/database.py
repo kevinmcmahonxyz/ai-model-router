@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str
     deepseek_api_key: str
     google_api_key: str
+    redis_url: str = "redis://localhost:6379/0"
     app_env: Optional[str] = "development"
     log_level: Optional[str] = "INFO"
     
@@ -44,3 +45,8 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def get_settings() -> Settings:
+    """Get application settings."""
+    return settings
