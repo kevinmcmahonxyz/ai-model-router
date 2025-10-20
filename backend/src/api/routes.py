@@ -12,6 +12,7 @@ from src.providers.openai_provider import OpenAIProvider
 from src.services.cost_calculator import calculate_cost
 from src.services.model_selector import ModelSelector
 from src.services.budget_service import BudgetService
+from src.services.cache_service import CacheService
 from src.api.models import ComparisonRequest, ComparisonResponse
 from src.services.comparison_service import ComparisonService
 
@@ -148,7 +149,44 @@ async def chat_completion(
                 detail=f"Model '{request.model}' not found or inactive"
             )
         
-        # Send request
+        # Check cache first
+        cache_service = CacheService()
+        cached_response = cache_service.get(
+            messages=messages,
+            model_id=model.model_id,
+            temperature=request.temperature or 0.7,
+            max_tokens=request.max_tokens
+        )
+        
+        if cached_response:
+            # Return cached response (costs = $0!)
+            usage = cached_response["usage"]
+            
+            # Generate new ID for this cached response
+            cached_request_id = uuid.uuid4()
+            
+            return ChatCompletionResponse(
+                id=str(cached_request_id),  # Generate new ID instead of using cached_response["id"]
+                model=model.model_id,
+                provider=model.provider.name,
+                content=cached_response["content"],
+                finish_reason=cached_response.get("finish_reason"),
+                usage=UsageInfo(
+                    prompt_tokens=usage["input_tokens"],
+                    completion_tokens=usage["output_tokens"],
+                    total_tokens=usage["total_tokens"],
+                    input_cost_usd=0.0,  # Cached = free!
+                    output_cost_usd=0.0,
+                    total_cost_usd=0.0,
+                    estimated_cost_usd=None
+                ),
+                latency_ms=cached_response["latency_ms"],
+                created_at=datetime.utcnow().isoformat(),
+                selection_mode="manual",
+                models_considered=None
+            )
+        
+        # Cache miss - send request to provider
         result = await _send_to_provider(model, messages, request_params)
         
         if not result["success"]:
@@ -170,6 +208,16 @@ async def chat_completion(
             db.commit()
             
             raise HTTPException(status_code=500, detail=f"Provider error: {result['error']}")
+        
+        # Cache the successful response
+        cache_service.set(
+            messages=messages,
+            model_id=model.model_id,
+            response=result,
+            temperature=request.temperature or 0.7,
+            max_tokens=request.max_tokens,
+            ttl_seconds=3600  # 1 hour default
+        )
         
         models_considered = None
         selection_mode = "manual"
