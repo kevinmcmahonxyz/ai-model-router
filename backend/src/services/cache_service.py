@@ -6,6 +6,9 @@ import redis
 from datetime import timedelta
 
 from src.models.database import get_settings
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 
 class CacheService:
@@ -30,8 +33,9 @@ class CacheService:
         # Test connection
         try:
             self.redis_client.ping()
-        except redis.ConnectionError:
-            print("WARNING: Redis connection failed. Caching disabled.")
+            logger.debug("Redis connection established")
+        except redis.ConnectionError as e:
+            logger.warning(f"Redis connection failed: {e}. Caching disabled.")
             self.enabled = False
     
     def _generate_cache_key(
@@ -82,14 +86,14 @@ class CacheService:
             cached_data = self.redis_client.get(cache_key)
             
             if cached_data:
-                print(f"✓ Cache HIT for {model_id}")
+                logger.info(f"Cache HIT for {model_id}")
                 return json.loads(cached_data)
             else:
-                print(f"✗ Cache MISS for {model_id}")
+                logger.debug(f"Cache MISS for {model_id}")
                 return None
                 
         except Exception as e:
-            print(f"Cache get error: {e}")
+            logger.error(f"Cache get error: {e}")
             return None
     
     def set(
@@ -132,11 +136,11 @@ class CacheService:
                 json.dumps(response)
             )
             
-            print(f"✓ Cached response for {model_id} (TTL: {ttl_seconds}s)")
+            logger.info(f"Cached response for {model_id} (TTL: {ttl_seconds}s)")
             return True
             
         except Exception as e:
-            print(f"Cache set error: {e}")
+            logger.error(f"Cache set error: {e}")
             return False
     
     def clear_all(self) -> int:
@@ -152,10 +156,12 @@ class CacheService:
         try:
             keys = self.redis_client.keys("llm_cache:*")
             if keys:
-                return self.redis_client.delete(*keys)
+                count = self.redis_client.delete(*keys)
+                logger.info(f"Cleared {count} cached responses")
+                return count
             return 0
         except Exception as e:
-            print(f"Cache clear error: {e}")
+            logger.error(f"Cache clear error: {e}")
             return 0
     
     def get_stats(self) -> Dict[str, Any]:
@@ -174,4 +180,5 @@ class CacheService:
                 "connected_clients": info.get("connected_clients"),
             }
         except Exception as e:
+            logger.error(f"Cache stats error: {e}")
             return {"enabled": False, "error": str(e)}
