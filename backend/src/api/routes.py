@@ -15,6 +15,8 @@ from src.services.budget_service import BudgetService
 from src.services.cache_service import CacheService
 from src.api.models import ComparisonRequest, ComparisonResponse
 from src.services.comparison_service import ComparisonService
+from src.api.models import ComparisonRequest, ComparisonResponse, BatchRequest, BatchResponse
+from src.services.batch_service import BatchService
 
 router = APIRouter()
 
@@ -397,6 +399,64 @@ async def compare_models(
     )
     
     return result
+
+@router.post("/v1/chat/batch", response_model=BatchResponse)
+async def batch_process(
+    request: BatchRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Process multiple chat completion requests in parallel.
+    
+    Send multiple prompts to the same model concurrently for faster
+    processing. Useful for:
+    - Analyzing batches of customer feedback
+    - Translating multiple documents
+    - Categorizing lists of items
+    - A/B testing prompt variations
+    
+    All requests run in parallel - total time ≈ slowest request time.
+    """
+    if not request.requests or len(request.requests) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Must provide at least 1 request"
+        )
+    
+    if len(request.requests) > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum 100 requests per batch"
+        )
+    
+    # Build request parameters
+    request_params = {}
+    if request.temperature is not None:
+        request_params['temperature'] = request.temperature
+    if request.max_tokens is not None:
+        request_params['max_tokens'] = request.max_tokens
+    
+    # Convert BatchRequestItem objects to dicts
+    requests_data = [
+        {
+            'messages': item.messages,
+            'id': item.id
+        }
+        for item in request.requests
+    ]
+    
+    # Execute batch
+    batch_service = BatchService(db)
+    result = await batch_service.process_batch(
+        user_id=user.id,
+        model_id=request.model,
+        requests=requests_data,
+        request_params=request_params
+    )
+    
+    return result
+
 
 @router.get("/v1/budget")
 async def get_budget(

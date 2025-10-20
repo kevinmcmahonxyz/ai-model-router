@@ -108,3 +108,36 @@ class ComparisonResponse(BaseModel):
     results: List[ComparisonResult]
     total_cost_usd: float
     created_at: str    
+
+class BatchRequestItem(BaseModel):
+    """Single item in a batch request."""
+    messages: List[Dict[str, str]]
+    id: Optional[str] = None  # Optional user-provided ID to track which request is which
+
+class BatchRequest(BaseModel):
+    """Request model for batch processing endpoint."""
+    requests: List[BatchRequestItem]
+    model: str  # All requests use the same model
+    temperature: Optional[float] = 0.7
+    max_tokens: Optional[int] = None
+
+class BatchResponseItem(BaseModel):
+    """Single item in a batch response."""
+    id: str  # Request ID (user-provided or generated)
+    index: int  # Position in the batch
+    content: Optional[str] = None
+    finish_reason: Optional[str] = None
+    usage: UsageInfo
+    status: str  # 'success' or 'error'
+    error_message: Optional[str] = None
+
+class BatchResponse(BaseModel):
+    """Response model for batch processing endpoint."""
+    batch_id: str
+    total_requests: int
+    successful: int
+    failed: int
+    results: List[BatchResponseItem]
+    total_cost_usd: float
+    total_latency_ms: int
+    created_at: str
