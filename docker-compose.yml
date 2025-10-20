@@ -1,12 +1,14 @@
 services:
   postgres:
     image: postgres:15-alpine
+    container_name: ai-router-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: router_user
       POSTGRES_PASSWORD: router_password
       POSTGRES_DB: router_db
     ports:
-      - "5433:5432"  # External:Internal - changed from 5432:5432
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -14,10 +16,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - ai-router-network
 
   redis:
     image: redis:7-alpine
     container_name: ai-router-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     command: redis-server --appendonly yes
@@ -28,24 +33,42 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    networks:
+      - ai-router-network
 
   backend:
-    build: ./backend
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
-    volumes:
-      - ./backend:/app
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-router-backend
+    restart: unless-stopped
     ports:
-      - "8001:8000"  # Also changed from 8000 to 8001 to avoid conflict
+      - "8001:8000"
+    env_file:
+      - ./backend/.env
     environment:
       - DATABASE_URL=postgresql://router_user:router_password@postgres:5432/router_db
       - REDIS_URL=redis://redis:6379/0
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ai-router-network
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  ai-router-network:
+    driver: bridge

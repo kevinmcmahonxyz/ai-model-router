@@ -11,6 +11,9 @@ from src.providers.anthropic_provider import AnthropicProvider
 from src.providers.deepseek_provider import DeepSeekProvider
 from src.providers.google_provider import GoogleProvider
 from src.services.cost_calculator import calculate_cost
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 
 class BatchService:
@@ -113,7 +116,7 @@ class BatchService:
             )
             self.db.add(db_request)
             
-            print(f"✓ Batch request {request_index + 1} succeeded ({latency_ms}ms)")
+            logger.debug(f"Batch request {request_index + 1} succeeded ({latency_ms}ms)")
             
             return {
                 'id': request_id,
@@ -158,7 +161,7 @@ class BatchService:
             )
             self.db.add(db_request)
             
-            print(f"✗ Batch request {request_index + 1} failed: {str(e)}")
+            logger.error(f"Batch request {request_index + 1} failed: {str(e)}")
             
             return {
                 'id': request_id,
@@ -208,12 +211,9 @@ class BatchService:
         if not model:
             raise ValueError(f"Model {model_id} not found or inactive")
         
-        print(f"\n{'='*60}")
-        print(f"🚀 BATCH PROCESSING")
-        print(f"{'='*60}")
-        print(f"Total requests: {len(requests)}")
-        print(f"Model: {model.display_name}")
-        print(f"{'='*60}\n")
+        logger.info(
+            f"Starting batch {batch_id}: {len(requests)} requests using {model.display_name}"
+        )
         
         # Create tasks for all requests
         tasks = []
@@ -246,14 +246,12 @@ class BatchService:
         # Commit all database changes
         self.db.commit()
         
-        print(f"\n{'='*60}")
-        print(f"✓ BATCH COMPLETE")
-        print(f"{'='*60}")
-        print(f"Successful: {successful}/{len(requests)}")
-        print(f"Failed: {failed}/{len(requests)}")
-        print(f"Total cost: ${total_cost:.6f}")
-        print(f"Total time: {total_latency_ms}ms")
-        print(f"{'='*60}\n")
+        logger.info(
+            f"Batch {batch_id} complete - "
+            f"Success: {successful}/{len(requests)}, "
+            f"Cost: ${total_cost:.6f}, "
+            f"Time: {total_latency_ms}ms"
+        )
         
         return {
             'batch_id': str(batch_id),

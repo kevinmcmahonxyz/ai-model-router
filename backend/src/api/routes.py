@@ -5,7 +5,11 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 
-from src.api.models import ChatCompletionRequest, ChatCompletionResponse, UsageInfo
+from src.api.models import (
+    ChatCompletionRequest, ChatCompletionResponse, UsageInfo,
+    ComparisonRequest, ComparisonResponse,
+    BatchRequest, BatchResponse
+)
 from src.models.database import get_db
 from src.models.schemas import User, Model, Request
 from src.providers.openai_provider import OpenAIProvider
@@ -13,11 +17,11 @@ from src.services.cost_calculator import calculate_cost
 from src.services.model_selector import ModelSelector
 from src.services.budget_service import BudgetService
 from src.services.cache_service import CacheService
-from src.api.models import ComparisonRequest, ComparisonResponse
 from src.services.comparison_service import ComparisonService
-from src.api.models import ComparisonRequest, ComparisonResponse, BatchRequest, BatchResponse
 from src.services.batch_service import BatchService
+from src.utils.logger import setup_logger
 
+logger = setup_logger(__name__)
 router = APIRouter()
 
 
@@ -72,6 +76,7 @@ async def _send_to_provider(
         model=model.model_id,
         **request_params
     )
+
 
 @router.post("/v1/chat/completions", response_model=ChatCompletionResponse)
 async def chat_completion(
@@ -163,12 +168,12 @@ async def chat_completion(
         if cached_response:
             # Return cached response (costs = $0!)
             usage = cached_response["usage"]
-            
-            # Generate new ID for this cached response
             cached_request_id = uuid.uuid4()
             
+            logger.info(f"Cache hit for model {model.model_id} - returning cached response")
+            
             return ChatCompletionResponse(
-                id=str(cached_request_id),  # Generate new ID instead of using cached_response["id"]
+                id=str(cached_request_id),
                 model=model.model_id,
                 provider=model.provider.name,
                 content=cached_response["content"],
@@ -209,6 +214,7 @@ async def chat_completion(
             db.add(request_log)
             db.commit()
             
+            logger.error(f"Provider error for model {model.model_id}: {result['error']}")
             raise HTTPException(status_code=500, detail=f"Provider error: {result['error']}")
         
         # Cache the successful response
@@ -246,12 +252,10 @@ async def chat_completion(
         models_considered = len(ranked_models)
         estimated_cost = ranked_models[0]["estimated_cost"]
         
-        print(f"\n{'='*60}")
-        print(f"🎯 COST-OPTIMIZED MODE")
-        print(f"{'='*60}")
-        print(f"Models evaluated: {models_considered}")
-        print(f"Selected: {ranked_models[0]['display_name']} (${estimated_cost:.6f})")
-        print(f"{'='*60}\n")
+        logger.info(
+            f"Cost-optimized mode: Evaluated {models_considered} models, "
+            f"selected {ranked_models[0]['display_name']} (${estimated_cost:.6f})"
+        )
         
         # Try models in order (cheapest first) until one succeeds
         result = None
@@ -263,21 +267,22 @@ async def chat_completion(
                 Model.id == model_info["model_db_id"]
             ).first()
             
-            print(f"→ Trying {model_info['display_name']}...")
+            logger.debug(f"Trying model: {model_info['display_name']}")
             
             # Send request
             result = await _send_to_provider(model, messages, request_params)
             
             if result["success"]:
-                print(f"✓ Success with {model_info['display_name']}")
+                logger.info(f"Model succeeded: {model_info['display_name']}")
                 break
             else:
-                print(f"✗ Failed with {model_info['display_name']}: {result['error']}")
+                logger.warning(f"Model failed: {model_info['display_name']} - {result['error']}")
                 # Try next model
                 continue
         
         # If all models failed
         if not result or not result["success"]:
+            logger.error("All available models failed")
             raise HTTPException(
                 status_code=500,
                 detail="All available models failed"
@@ -320,17 +325,13 @@ async def chat_completion(
     # Update user's total spending
     budget_service.update_spending(user.id, cost_info["total_cost_usd"])
 
-    # Console output
-    print(f"\n{'='*60}")
-    print(f"✓ Request successful")
-    print(f"Mode: {selection_mode}")
-    print(f"Model: {model.model_id}")
-    if estimated_cost:
-        print(f"Estimated cost: ${estimated_cost:.6f}")
-    print(f"Actual cost: ${cost_info['total_cost_usd']:.6f}")
-    print(f"Tokens: {usage['input_tokens']} in / {usage['output_tokens']} out")
-    print(f"Latency: {result['latency_ms']}ms")
-    print(f"{'='*60}\n")
+    # Log request completion
+    logger.info(
+        f"Request successful - Mode: {selection_mode}, Model: {model.model_id}, "
+        f"Cost: ${cost_info['total_cost_usd']:.6f}, "
+        f"Tokens: {usage['input_tokens']}/{usage['output_tokens']}, "
+        f"Latency: {result['latency_ms']}ms"
+    )
     
     # Return response
     return ChatCompletionResponse(
@@ -353,6 +354,7 @@ async def chat_completion(
         selection_mode=selection_mode,
         models_considered=models_considered
     )
+
 
 @router.post("/v1/chat/compare", response_model=ComparisonResponse)
 async def compare_models(
@@ -389,6 +391,8 @@ async def compare_models(
     if request.top_p is not None:
         request_params['top_p'] = request.top_p
     
+    logger.info(f"Starting comparison of {len(request.models)} models")
+    
     # Execute comparison
     comparison_service = ComparisonService(db)
     result = await comparison_service.compare_models(
@@ -398,7 +402,10 @@ async def compare_models(
         request_params=request_params
     )
     
+    logger.info(f"Comparison complete - ID: {result['comparison_id']}, Cost: ${result['total_cost_usd']:.6f}")
+    
     return result
+
 
 @router.post("/v1/chat/batch", response_model=BatchResponse)
 async def batch_process(
@@ -446,6 +453,8 @@ async def batch_process(
         for item in request.requests
     ]
     
+    logger.info(f"Starting batch processing of {len(request.requests)} requests using {request.model}")
+    
     # Execute batch
     batch_service = BatchService(db)
     result = await batch_service.process_batch(
@@ -453,6 +462,12 @@ async def batch_process(
         model_id=request.model,
         requests=requests_data,
         request_params=request_params
+    )
+    
+    logger.info(
+        f"Batch complete - ID: {result['batch_id']}, "
+        f"Success: {result['successful']}/{result['total_requests']}, "
+        f"Cost: ${result['total_cost_usd']:.6f}"
     )
     
     return result
@@ -493,6 +508,8 @@ async def set_budget_limit(
     budget_service = BudgetService(db)
     budget_service.set_spending_limit(user.id, limit_usd)
     
+    logger.info(f"Updated spending limit for user {user.id}: ${limit_usd}")
+    
     return {
         "message": "Spending limit updated",
         "spending_limit_usd": limit_usd
@@ -508,10 +525,13 @@ async def reset_budget(
     budget_service = BudgetService(db)
     budget_service.reset_spending(user.id)
     
+    logger.info(f"Reset spending counter for user {user.id}")
+    
     return {
         "message": "Spending counter reset to zero",
         "total_spent_usd": 0.0
     }
+
 
 @router.get("/health")
 async def health_check():

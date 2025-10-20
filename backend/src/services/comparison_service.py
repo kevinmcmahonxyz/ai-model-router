@@ -11,6 +11,9 @@ from src.providers.anthropic_provider import AnthropicProvider
 from src.providers.deepseek_provider import DeepSeekProvider
 from src.providers.google_provider import GoogleProvider
 from src.services.cost_calculator import calculate_cost
+from src.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 
 class ComparisonService:
@@ -78,7 +81,7 @@ class ComparisonService:
                 output_tokens = 0
                 total_tokens = 0
             
-            # Calculate costs - calculate_cost returns a dict
+            # Calculate costs
             cost_info = calculate_cost(
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
@@ -110,6 +113,8 @@ class ComparisonService:
                 completed_at=end_time
             )
             self.db.add(db_request)
+            
+            logger.info(f"Comparison: {model.model_id} succeeded in {latency_ms}ms, cost ${total_cost:.6f}")
             
             return {
                 'model': model.model_id,
@@ -155,6 +160,8 @@ class ComparisonService:
                 completed_at=end_time
             )
             self.db.add(db_request)
+            
+            logger.error(f"Comparison: {model.model_id} failed - {str(e)}")
             
             return {
                 'model': model.model_id,
@@ -219,6 +226,8 @@ class ComparisonService:
             missing = set(model_ids) - found_models
             raise ValueError(f"Models not found or inactive: {missing}")
         
+        logger.info(f"Starting comparison {comparison_id} with {len(models)} models")
+        
         # Send requests concurrently
         tasks = [
             self._send_to_model(model, messages, request_params, user_id, comparison_id)
@@ -237,6 +246,11 @@ class ComparisonService:
         
         # Commit everything
         self.db.commit()
+        
+        logger.info(
+            f"Comparison {comparison_id} complete - "
+            f"Total cost: ${total_cost:.6f}"
+        )
         
         return {
             'comparison_id': str(comparison_id),
