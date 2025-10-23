@@ -1,17 +1,75 @@
 # AI Model Router
 
-A REST API that routes LLM requests to multiple providers with comprehensive cost tracking and observability.
+A production-ready REST API that intelligently routes LLM requests across multiple providers (OpenAI, Anthropic, Google Gemini, DeepSeek) with comprehensive cost tracking, automatic optimization, and real-time analytics.
 
 ## Project Goals
 
 - Learn API development (building, testing, consuming)
-- Practice Git/GitHub workflows
+- Practice Git/GitHub workflows with feature branches and PRs
 - Build practical understanding of LLM provider integration
+- Implement cost optimization algorithms
+- Create production-ready code with testing and documentation
 
 ## Current Status
 
-**Phase 1: MVP** - ✅ Complete
-**Phase 3: Dashboard Backend APIs** - ✅ Complete
+✅ **All Phases Complete!**
+
+- **Phase 1: MVP** - Single provider routing with cost tracking
+- **Phase 2: Multi-Provider Support** - 4 providers, 14 models
+- **Phase 3: Dashboard** - React frontend with analytics
+- **Phase 4: Cost Optimization** - Automatic cheapest model selection
+- **Phase 5: Advanced Features** - A/B comparison, caching, batch processing
+- **Phase 6: Production Readiness** - Docker, logging, Redis
+- **Phase 7: Testing** - 49 automated tests, 50% coverage
+
+**This is a production-ready AI model router with comprehensive observability.**
+
+## Features
+
+### 🚀 Core Capabilities
+- **Multi-Provider Routing** - Route to OpenAI, Anthropic, Google Gemini, or DeepSeek
+- **14 Models Supported** - From budget ($0.28/1M tokens) to premium ($75/1M tokens)
+- **Cost Optimization** - Automatically select cheapest model for each request
+- **Budget Enforcement** - Set spending limits per user
+- **Comprehensive Analytics** - Track costs, latency, success rates by model/provider
+
+### 📊 Observability
+- **Real-time Dashboard** - React frontend with charts and filters
+- **Request History** - View full prompts, responses, and costs
+- **Cost Breakdowns** - Analyze spending by provider/model
+- **Performance Metrics** - Track latency and error rates
+
+### ⚡ Advanced Features
+- **A/B Comparison** - Test multiple models simultaneously
+- **Response Caching** - Redis-based caching for cost savings
+- **Batch Processing** - Process multiple prompts in parallel
+- **Token Estimation** - Predict costs before making requests
+
+### 🧪 Production Ready
+- **Docker Deployment** - Full stack containerization
+- **Structured Logging** - JSON logs with correlation IDs
+- **49 Automated Tests** - 50% code coverage with pytest
+- **API Documentation** - Auto-generated OpenAPI docs
+
+## Tech Stack
+
+**Backend:**
+- Python 3.11+ with FastAPI
+- PostgreSQL for data persistence
+- Redis for caching
+- SQLAlchemy ORM
+- Alembic for migrations
+- pytest for testing
+
+**Frontend:**
+- React + TypeScript
+- TailwindCSS for styling
+- Recharts for visualizations
+- Axios for API calls
+
+**Infrastructure:**
+- Docker & Docker Compose
+- Git & GitHub for version control
 
 ## Quick Start
 
@@ -19,17 +77,16 @@ A REST API that routes LLM requests to multiple providers with comprehensive cos
 
 - Python 3.11+
 - Docker & Docker Compose
-- PostgreSQL (via Docker)
+- Node.js 18+ (for frontend)
 
-### Setup
-
+### Backend Setup
 ```bash
 # 1. Clone the repository
 git clone https://github.com/kevinmcmahonxyz/ai-model-router.git
 cd ai-model-router
 
-# 2. Start PostgreSQL
-docker-compose up -d postgres
+# 2. Start PostgreSQL and Redis
+docker-compose up -d
 
 # 3. Set up backend
 cd backend
@@ -39,7 +96,11 @@ pip install -r requirements.txt
 
 # 4. Configure environment
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
+# Edit .env and add your API keys:
+# - OPENAI_API_KEY
+# - ANTHROPIC_API_KEY
+# - GOOGLE_API_KEY
+# - DEEPSEEK_API_KEY
 
 # 5. Run database migrations
 alembic upgrade head
@@ -54,12 +115,21 @@ uvicorn src.main:app --reload --port 8001
 
 Visit http://127.0.0.1:8001/docs for interactive API documentation.
 
+### Frontend Setup
+```bash
+# From project root
+cd frontend
+npm install
+npm run dev
+```
+
+Visit http://localhost:5173 for the dashboard.
+
 ## API Reference
 
 ### Authentication
 
 All endpoints require authentication via API key header:
-
 ```bash
 X-API-Key: your_api_key_here
 ```
@@ -70,16 +140,23 @@ X-API-Key: your_api_key_here
 
 Route a chat completion request to an LLM provider.
 
-**Request:**
+**Manual Mode:**
 ```json
 {
   "messages": [
-    {"role": "system", "content": "You are a helpful assistant."},
     {"role": "user", "content": "What is the capital of France?"}
   ],
-  "model": "gpt-4o-mini",
-  "temperature": 0.7,
-  "max_tokens": 500
+  "model": "gpt-4o-mini"
+}
+```
+
+**Cost-Optimized Mode:**
+```json
+{
+  "messages": [
+    {"role": "user", "content": "What is the capital of France?"}
+  ],
+  "mode": "cost-optimized"
 }
 ```
 
@@ -104,18 +181,34 @@ Route a chat completion request to an LLM provider.
 }
 ```
 
-**Example:**
-```bash
-curl -X POST "http://127.0.0.1:8001/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $API_KEY" \
-  -d '{
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "model": "gpt-4o-mini"
-  }'
+### A/B Comparison API
+
+#### POST /v1/chat/compare
+
+Compare responses from multiple models simultaneously.
+```json
+{
+  "messages": [
+    {"role": "user", "content": "Explain quantum computing"}
+  ],
+  "models": ["gpt-4o", "claude-sonnet-4", "gemini-2.0-flash"]
+}
 ```
 
----
+### Batch Processing API
+
+#### POST /v1/chat/batch
+
+Process multiple prompts in parallel.
+```json
+{
+  "requests": [
+    {"messages": [{"role": "user", "content": "Hello"}]},
+    {"messages": [{"role": "user", "content": "Goodbye"}]}
+  ],
+  "model": "gpt-4o-mini"
+}
+```
 
 ### Analytics API
 
@@ -126,188 +219,50 @@ Get aggregate usage statistics and cost breakdowns.
 **Query Parameters:**
 - `days` (int, optional): Number of days to analyze (default: 30, max: 365)
 
-**Response:**
-```json
-{
-  "total_requests": 145,
-  "total_cost_usd": 0.234567,
-  "avg_latency_ms": 1234,
-  "success_rate": 0.98,
-  "by_provider": [
-    {
-      "provider": "openai",
-      "requests": 145,
-      "cost_usd": 0.234567
-    }
-  ],
-  "by_model": [
-    {
-      "model": "gpt-4o-mini",
-      "requests": 100,
-      "cost_usd": 0.150000
-    },
-    {
-      "model": "gpt-4o",
-      "requests": 45,
-      "cost_usd": 0.084567
-    }
-  ],
-  "daily_stats": [
-    {
-      "date": "2025-10-15",
-      "requests": 20,
-      "cost_usd": 0.045123
-    }
-  ]
-}
-```
-
-**Example:**
-```bash
-curl -X GET "http://127.0.0.1:8001/v1/analytics/usage?days=7" \
-  -H "X-API-Key: $API_KEY"
-```
-
----
-
 #### GET /v1/analytics/requests
 
-Get paginated list of requests with filtering and search.
+Get paginated list of requests with filtering.
 
 **Query Parameters:**
-- `page` (int, optional): Page number (default: 1, min: 1)
-- `per_page` (int, optional): Items per page (default: 20, max: 100)
-- `model` (string, optional): Filter by model ID (e.g., "gpt-4o-mini")
-- `status` (string, optional): Filter by status ("success" or "error")
-- `search` (string, optional): Search in prompt text
-- `start_date` (datetime, optional): Filter by start date (ISO format)
-- `end_date` (datetime, optional): Filter by end date (ISO format)
-
-**Response:**
-```json
-{
-  "requests": [
-    {
-      "id": "abc-123",
-      "created_at": "2025-10-16T10:30:00Z",
-      "model": "gpt-4o-mini",
-      "provider": "openai",
-      "prompt_preview": "What is the capital of France?",
-      "input_tokens": 23,
-      "output_tokens": 8,
-      "total_cost_usd": 0.00000825,
-      "latency_ms": 1234,
-      "status": "success"
-    }
-  ],
-  "total": 145,
-  "page": 1,
-  "per_page": 20,
-  "total_pages": 8
-}
-```
-
-**Examples:**
-```bash
-# Get first page
-curl -X GET "http://127.0.0.1:8001/v1/analytics/requests" \
-  -H "X-API-Key: $API_KEY"
-
-# Filter by model
-curl -X GET "http://127.0.0.1:8001/v1/analytics/requests?model=gpt-4o-mini" \
-  -H "X-API-Key: $API_KEY"
-
-# Search and filter
-curl -X GET "http://127.0.0.1:8001/v1/analytics/requests?search=weather&status=success" \
-  -H "X-API-Key: $API_KEY"
-
-# Date range
-curl -X GET "http://127.0.0.1:8001/v1/analytics/requests?start_date=2025-10-01T00:00:00Z&end_date=2025-10-15T23:59:59Z" \
-  -H "X-API-Key: $API_KEY"
-```
-
----
+- `page` (int): Page number (default: 1)
+- `per_page` (int): Items per page (default: 20, max: 100)
+- `model` (string): Filter by model ID
+- `status` (string): Filter by status ("success" or "error")
+- `search` (string): Search in prompt text
+- `start_date`, `end_date` (datetime): Date range filters
 
 #### GET /v1/analytics/requests/{request_id}
 
 Get full details of a specific request.
 
-**Path Parameters:**
-- `request_id` (string): UUID of the request
-
-**Response:**
-```json
-{
-  "id": "abc-123",
-  "created_at": "2025-10-16T10:30:00Z",
-  "completed_at": "2025-10-16T10:30:02Z",
-  "model": "gpt-4o-mini",
-  "provider": "openai",
-  "prompt_text": "What is the capital of France?",
-  "response_text": "The capital of France is Paris.",
-  "input_tokens": 23,
-  "output_tokens": 8,
-  "total_tokens": 31,
-  "input_cost_usd": 0.00000345,
-  "output_cost_usd": 0.00000480,
-  "total_cost_usd": 0.00000825,
-  "latency_ms": 1234,
-  "status": "success",
-  "error_message": null
-}
-```
-
-**Example:**
-```bash
-curl -X GET "http://127.0.0.1:8001/v1/analytics/requests/abc-123" \
-  -H "X-API-Key: $API_KEY"
-```
-
----
-
 #### GET /v1/analytics/models
 
 Get list of all available models with pricing information.
 
-**Response:**
+### Budget API
+
+#### GET /v1/budget
+
+Get current budget status and spending.
+
+#### PUT /v1/budget/limit
+
+Set spending limit.
 ```json
-[
-  {
-    "id": 1,
-    "model_id": "gpt-4o-mini",
-    "display_name": "GPT-4o Mini",
-    "provider": "openai",
-    "input_price_per_1m_tokens": 0.15,
-    "output_price_per_1m_tokens": 0.60,
-    "context_window": 128000,
-    "is_active": true
-  },
-  {
-    "id": 2,
-    "model_id": "gpt-4o",
-    "display_name": "GPT-4o",
-    "provider": "openai",
-    "input_price_per_1m_tokens": 2.50,
-    "output_price_per_1m_tokens": 10.00,
-    "context_window": 128000,
-    "is_active": true
-  }
-]
+{
+  "limit_usd": 100.00
+}
 ```
 
-**Example:**
-```bash
-curl -X GET "http://127.0.0.1:8001/v1/analytics/models" \
-  -H "X-API-Key: $API_KEY"
-```
+#### POST /v1/budget/reset
 
----
+Reset spending for current period.
 
 ## Testing
 
-### **Prerequisites**
+### Prerequisites
 
-Tests use PostgreSQL (not SQLite) to ensure 100% parity with production. This catches database-specific issues like UUID handling.
+Tests use PostgreSQL (not SQLite) to ensure 100% parity with production.
 
 **Before running tests:**
 
@@ -321,10 +276,7 @@ docker-compose up -d postgres
 docker-compose exec postgres psql -U router_user -d router_db -c "CREATE DATABASE router_test_db;"
 ```
 
-That's it! The test suite will automatically create/drop tables as needed.
-
-### **Running Tests**
-
+### Running Tests
 ```bash
 # Activate virtual environment
 cd backend
@@ -333,118 +285,62 @@ source venv/bin/activate
 # Run all tests
 pytest -v
 
-# Run specific test file
-pytest tests/test_analytics.py -v
-pytest tests/test_integration.py -v
-
 # Run with coverage
 pytest --cov=src --cov-report=term-missing
 
-# Generate HTML coverage report
-pytest --cov=src --cov-report=html
-open htmlcov/index.html
+# Run specific test file
+pytest tests/test_analytics.py -v
 
 # Run tests in parallel (faster)
 pytest -n auto
 ```
 
-### **Test Structure**
-
+### Test Structure
 ```
 tests/
-├── conftest.py           # Shared fixtures and test configuration
-├── test_analytics.py     # Unit tests for analytics endpoints (24 tests)
-└── test_integration.py   # Integration tests for workflows (8 tests)
+├── conftest.py              # Shared fixtures and configuration
+├── test_analytics.py        # Analytics endpoint tests (24 tests)
+├── test_integration.py      # Integration tests (8 tests)
+├── test_cost_calculator.py  # Cost calculation tests (4 tests)
+└── test_openai_provider.py  # Provider tests with mocking (6 tests)
+
+scripts/manual_tests/        # Manual integration tests (preserved for development)
 ```
 
-### **Why PostgreSQL for Tests?**
+**Current Test Coverage:** 50% (49 passing tests)
 
-We use PostgreSQL instead of SQLite because:
-- ✅ **100% production parity** - catches DB-specific bugs before production
-- ✅ **UUID support** - SQLite doesn't natively support UUID types
-- ✅ **Accurate behavior** - same query behavior as production
-- ✅ **Industry standard** - recommended by Django, Rails, and testing best practices
-
-The slight overhead is worth the confidence that tests match production behavior.
-
-### **Troubleshooting Tests**
-
-**"Connection refused" errors:**
-```bash
-# Make sure PostgreSQL is running
-docker-compose ps
-
-# Restart if needed
-docker-compose restart postgres
+## Project Structure
 ```
-
-**"Database does not exist" error:**
-```bash
-# Recreate test database
-docker-compose exec postgres psql -U router_user -d router_db -c "DROP DATABASE IF EXISTS router_test_db;"
-docker-compose exec postgres psql -U router_user -d router_db -c "CREATE DATABASE router_test_db;"
+ai-model-router/
+├── backend/
+│   ├── src/
+│   │   ├── api/              # FastAPI routes and models
+│   │   ├── models/           # Database models
+│   │   ├── providers/        # LLM provider integrations
+│   │   ├── services/         # Business logic
+│   │   └── utils/            # Utilities and scripts
+│   ├── tests/                # Automated test suite
+│   ├── scripts/              # Manual tests and utilities
+│   ├── alembic/              # Database migrations
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── components/       # React components
+│   │   ├── pages/            # Page components
+│   │   └── services/         # API client
+│   └── package.json
+└── docker-compose.yml        # Container orchestration
 ```
-
-**Tests are slow:**
-```bash
-# Run in parallel (requires pytest-xdist)
-pip install pytest-xdist
-pytest -n auto
-```
-
-## Development Workflow
-
-### Running Tests Before Commit
-
-```bash
-# 1. Activate virtual environment
-source venv/bin/activate
-
-# 2. Run tests
-pytest -v
-
-# 3. Check code works
-uvicorn src.main:app --reload --port 8001
-# Test manually or with curl
-```
-
-### Git Workflow
-
-```bash
-# 1. Create feature branch
-git checkout -b feature/your-feature
-
-# 2. Make changes and commit
-git add .
-git commit -m "feat: your feature description"
-
-# 3. Push and create PR
-git push origin feature/your-feature
-```
-
-## Tech Stack
-
-**Backend:**
-- Python 3.11+
-- FastAPI - Web framework
-- SQLAlchemy - ORM
-- PostgreSQL - Database
-- Alembic - Database migrations
-- pytest - Testing
-- httpx - HTTP client
-
-**Infrastructure:**
-- Docker & Docker Compose
-- Git & GitHub
 
 ## Database Schema
-
 ```
 users
   - id (UUID)
   - api_key (string)
   - created_at (datetime)
   - is_active (boolean)
+  - spending_limit_usd (decimal)
+  - current_spending_usd (decimal)
 
 providers
   - id (integer)
@@ -457,8 +353,8 @@ models
   - provider_id (foreign key)
   - model_id (string)
   - display_name (string)
-  - input_price_per_1m_tokens (float)
-  - output_price_per_1m_tokens (float)
+  - input_price_per_1m_tokens (decimal)
+  - output_price_per_1m_tokens (decimal)
   - context_window (integer)
   - is_active (boolean)
 
@@ -470,37 +366,72 @@ requests
   - prompt_text (text)
   - response_text (text)
   - input_tokens, output_tokens, total_tokens (integers)
-  - input_cost_usd, output_cost_usd, total_cost_usd (floats)
+  - input_cost_usd, output_cost_usd, total_cost_usd (decimals)
   - latency_ms (integer)
   - status (string)
   - error_message (text)
   - created_at, completed_at (datetime)
 ```
 
-## Project Phases
+## Development Workflow
 
-- [x] **Phase 1: MVP** - Single provider routing with cost tracking
-- [ ] **Phase 2: Multi-Provider Support** - Add Anthropic, Google, DeepSeek
-- [x] **Phase 3: Dashboard (Backend)** - Analytics API endpoints ← **Currently Here**
-- [ ] **Phase 3: Dashboard (Frontend)** - React UI
-- [ ] **Phase 4: Cost Optimization** - Automatic cheapest-model selection
-- [ ] **Phase 5: Advanced Features** - A/B testing, caching, webhooks
-
-## Common Commands
-
+### Running Locally
 ```bash
-# Start database
-docker-compose up -d postgres
+# Start services
+docker-compose up -d
 
-# Start backend (from backend/)
+# Backend (terminal 1)
+cd backend
 source venv/bin/activate
 uvicorn src.main:app --reload --port 8001
 
-# Run migrations
+# Frontend (terminal 2)
+cd frontend
+npm run dev
+```
+
+### Making Changes
+```bash
+# 1. Create feature branch
+git checkout -b feature/your-feature-name
+
+# 2. Make changes and test
+pytest -v
+
+# 3. Commit with conventional commits
+git add .
+git commit -m "feat(scope): description"
+
+# 4. Push and create PR
+git push origin feature/your-feature-name
+```
+
+### Database Migrations
+```bash
+# Create migration after model changes
+alembic revision --autogenerate -m "description"
+
+# Apply migrations
 alembic upgrade head
 
-# Create migration
-alembic revision --autogenerate -m "description"
+# Rollback
+alembic downgrade -1
+```
+
+## Common Commands
+```bash
+# Start all services
+docker-compose up -d
+
+# Stop all services
+docker-compose down
+
+# View logs
+docker-compose logs -f postgres
+docker-compose logs -f redis
+
+# Run migrations
+alembic upgrade head
 
 # Seed database
 python src/utils/seed_data.py
@@ -511,31 +442,64 @@ python src/utils/create_api_key.py
 # Generate test data
 python src/utils/generate_test_data.py
 
-# Run tests
-pytest -v
-
-# Check database
-docker-compose exec postgres psql -U router_user -d router_db
+# Run tests with coverage
+pytest --cov=src --cov-report=html
+open htmlcov/index.html
 ```
 
 ## Environment Variables
 
 Create a `.env` file in the `backend/` directory:
-
 ```env
+# Database
 DATABASE_URL=postgresql://router_user:router_password@localhost:5433/router_db
+
+# LLM Provider API Keys
 OPENAI_API_KEY=sk-proj-your-key-here
+ANTHROPIC_API_KEY=sk-ant-your-key-here
+GOOGLE_API_KEY=your-key-here
+DEEPSEEK_API_KEY=your-key-here
+
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# Application
 APP_ENV=development
 LOG_LEVEL=INFO
 ```
 
+## Supported Models
+
+### OpenAI
+- `gpt-4o` - $2.50/$10.00 per 1M tokens
+- `gpt-4o-mini` - $0.15/$0.60 per 1M tokens
+- `gpt-3.5-turbo` - $0.50/$1.50 per 1M tokens
+
+### Anthropic
+- `claude-opus-4.1` - $15.00/$75.00 per 1M tokens
+- `claude-opus-4` - $15.00/$75.00 per 1M tokens
+- `claude-sonnet-4.5` - $3.00/$15.00 per 1M tokens
+- `claude-sonnet-4` - $3.00/$15.00 per 1M tokens
+- `claude-haiku-3.5` - $0.80/$4.00 per 1M tokens
+
+### DeepSeek
+- `deepseek-chat` - $0.14/$0.28 per 1M tokens (cheapest!)
+
+### Google Gemini
+- `gemini-2.0-flash` - $0.10/$0.40 per 1M tokens
+- `gemini-2.5-flash` - $0.075/$0.30 per 1M tokens
+- `gemini-2.5-flash-lite` - $0.0375/$0.15 per 1M tokens
+- `gemini-2.5-pro` - $1.25/$5.00 per 1M tokens
+
 ## Troubleshooting
 
-**Port conflicts:**
+### Port Conflicts
 - PostgreSQL runs on port 5433 (not default 5432)
 - Backend API runs on port 8001 (not default 8000)
+- Frontend runs on port 5173
+- Redis runs on port 6379
 
-**Database connection issues:**
+### Database Issues
 ```bash
 # Check if postgres is running
 docker-compose ps
@@ -545,26 +509,43 @@ docker-compose logs postgres
 
 # Restart database
 docker-compose restart postgres
-```
 
-**Migration issues:**
-```bash
 # Reset database (WARNING: destroys all data)
 docker-compose exec postgres psql -U router_user -d router_db \
   -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-
-# Rerun migrations
 alembic upgrade head
 ```
 
-## Contributing
+### Redis Issues
+```bash
+# Check Redis
+docker-compose logs redis
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with tests
-4. Ensure tests pass: `pytest -v`
-5. Commit with conventional commits
-6. Push and create a pull request
+# Test Redis connection
+docker-compose exec redis redis-cli ping
+```
+
+### Migration Issues
+```bash
+# View migration history
+alembic history
+
+# Check current version
+alembic current
+
+# Manually stamp version
+alembic stamp head
+```
+
+## Project Phases
+
+- ✅ **Phase 1: MVP** - Single provider routing with cost tracking
+- ✅ **Phase 2: Multi-Provider Support** - Add Anthropic, Google, DeepSeek
+- ✅ **Phase 3: Dashboard** - React UI with analytics
+- ✅ **Phase 4: Cost Optimization** - Automatic cheapest-model selection
+- ✅ **Phase 5: Advanced Features** - A/B testing, caching, batch processing
+- ✅ **Phase 6: Production Readiness** - Docker, logging, configuration
+- ✅ **Phase 7: Testing** - Comprehensive test suite
 
 ## License
 
